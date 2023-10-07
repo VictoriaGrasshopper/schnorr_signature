@@ -37,7 +37,7 @@ impl PartialSignature {
         &self,
         cap_x: &RistrettoPoint,
         cap_r: &RistrettoPoint,
-        message: &String,
+        message: &str,
     ) -> Result<(), String> {
         if verify_signature(cap_x, cap_r, message, self.partial_signature) {
             Ok(())

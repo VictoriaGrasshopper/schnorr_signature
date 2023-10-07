@@ -1,3 +1,4 @@
+
 use tracing::subscriber::set_global_default;
 use tracing::Subscriber;
 use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
@@ -23,7 +24,9 @@ where
         .with(formatting_layer)
 }
 
-pub fn init_subscriber(subscriber: impl Subscriber + Sync + Send) {
-    LogTracer::init().expect("Failed to set logger");
-    set_global_default(subscriber).expect("Failed to set subscriber");
+pub fn init_subscriber(
+    subscriber: impl Subscriber + Sync + Send,
+) -> Result<(), Box<dyn std::error::Error>> {
+    LogTracer::init()?;
+    set_global_default(subscriber).map_err(|err| err.into())
 }

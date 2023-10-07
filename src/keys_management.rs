@@ -5,14 +5,16 @@ use secrecy::{ExposeSecret, Secret};
 
 pub struct KeyPair {
     pub(crate) private_key: Secret<Scalar>,
-    pub public_key: RistrettoPoint,
+    pub(crate) public_key: RistrettoPoint,
 }
 
 use std::fmt;
 impl fmt::Debug for KeyPair {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         // Format the KeyPair struct without including private_key
-        write!(f, "KeyPair {{ public_key: {:?} }}", self.public_key)
+        fmt.debug_struct("RandomNonce")
+            .field("public_key", &self.public_key)
+            .finish()
     }
 }
 
@@ -29,8 +31,10 @@ impl Clone for KeyPair {
 }
 
 impl KeyPair {
-    pub fn create() -> KeyPair {
-        let mut rng = rand::thread_rng();
+    pub fn create<R>(mut rng: R) -> KeyPair
+    where
+        R: rand::CryptoRng + rand::RngCore,
+    {
         let private_key = Secret::new(Scalar::random(&mut rng));
         let public_key: RistrettoPoint = private_key.expose_secret() * RISTRETTO_BASEPOINT_POINT;
         KeyPair {
@@ -47,14 +51,7 @@ impl KeyPair {
         }
     }
 
-    // TODO
-    // pub fn create_from_seed(seed: Scalar) -> KeyPair {
-    //     let private_key = Scalar::random(seed);
-    //     let ec_point = RISTRETTO_BASEPOINT_POINT;
-    //     let public_key: RistrettoPoint = private_key * ec_point;
-    //     KeyPair {
-    //         private_key,
-    //         public_key,
-    //     }
-    // }
+    pub fn get_public_key(self) -> RistrettoPoint {
+        self.public_key
+    }
 }

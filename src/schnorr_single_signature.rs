@@ -26,9 +26,12 @@ impl SchnorrSignature {
     ///
     /// A SchnorrSignature struct containing `cap_r_compressed` and `s`.
     ///
-    #[tracing::instrument(name = "Signing the message with Schnorr signature")]
-    pub fn sign(message: &String, key_pair: &KeyPair) -> Self {
-        let nonce = RandomNonce::new_rand();
+    #[tracing::instrument(name = "Signing the message with Schnorr signature" skip(rng))]
+    pub fn sign<R>(message: &str, key_pair: &KeyPair, rng: R) -> Self
+    where
+        R: rand::CryptoRng + rand::RngCore,
+    {
+        let nonce = RandomNonce::new_rand(rng);
         let hash_rpm = calc_hash_rpm(key_pair.public_key, nonce.r_public, message);
         let s = nonce.r_private.expose_secret() + hash_rpm * key_pair.private_key.expose_secret();
 
@@ -51,7 +54,7 @@ impl SchnorrSignature {
     /// `true` if the signature is valid, `false` otherwise.
     ///
     #[tracing::instrument(name = "Verifying the Schnorr signature")]
-    pub fn verify(&self, public_key: RistrettoPoint, message: &String) -> bool {
+    pub fn verify(&self, public_key: RistrettoPoint, message: &str) -> bool {
         let r_public = self
             .cap_r_compressed
             .decompress()
@@ -81,7 +84,7 @@ impl SchnorrSignature {
 fn calc_hash_rpm(
     public_key: RistrettoPoint,
     r_compressed: RistrettoPoint,
-    message: &String,
+    message: &str,
 ) -> Scalar {
     let nonce_compressed = r_compressed.compress();
     let nonce_bytes = nonce_compressed.as_bytes();
@@ -101,15 +104,18 @@ fn calc_hash_rpm(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand_core::OsRng;
     #[test]
     fn test_valid_simple_signature() {
+        let csprng = OsRng;
+
         // Create participant keys and nonce
-        let keys = KeyPair::create();
+        let keys = KeyPair::create(csprng);
 
         // Message to be signed
         let message = "Hello World".to_string();
 
-        let signature = SchnorrSignature::sign(&message, &keys);
+        let signature = SchnorrSignature::sign(&message, &keys, csprng);
 
         let verification_result = signature.verify(keys.public_key, &message);
 
@@ -117,14 +123,16 @@ mod tests {
     }
     #[test]
     fn test_invalid_simple_signature() {
+        let csprng = OsRng;
+
         // Create participant keys and nonce
-        let keys = KeyPair::create();
+        let keys = KeyPair::create(csprng);
 
         // Message to be signed
         let message = "Hello World".to_string();
         let invalid_message = "Send 0.000001 BTC to Bob".to_string();
 
-        let signature = SchnorrSignature::sign(&message, &keys);
+        let signature = SchnorrSignature::sign(&message, &keys, csprng);
 
         let verification_result = signature.verify(keys.public_key, &invalid_message);
 

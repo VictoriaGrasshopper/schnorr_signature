@@ -3,16 +3,18 @@ use curve25519_dalek::RistrettoPoint;
 use curve25519_dalek::Scalar;
 use secrecy::{ExposeSecret, Secret};
 
-pub struct RandomNonce {
-    pub r_public: RistrettoPoint,
+pub(crate) struct RandomNonce {
+    pub(crate) r_public: RistrettoPoint,
     pub(crate) r_private: Secret<Scalar>,
 }
 
 use std::fmt;
 impl fmt::Debug for RandomNonce {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         // Format the KeyPair struct without including private_key
-        write!(f, "RandomNonce {{ r_public: {:?} }}", self.r_public)
+        fmt.debug_struct("RandomNonce")
+            .field("r_public", &self.r_public)
+            .finish()
     }
 }
 
@@ -29,8 +31,10 @@ impl Clone for RandomNonce {
 }
 
 impl RandomNonce {
-    pub fn new_rand() -> RandomNonce {
-        let mut rng = rand::thread_rng();
+    pub fn new_rand<R>(mut rng: R) -> RandomNonce
+    where
+        R: rand::CryptoRng + rand::RngCore,
+    {
         let r_private = Secret::new(Scalar::random(&mut rng));
         let r_public: RistrettoPoint = r_private.expose_secret() * RISTRETTO_BASEPOINT_POINT;
         RandomNonce {

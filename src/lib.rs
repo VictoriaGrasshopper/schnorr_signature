@@ -62,6 +62,8 @@ pub mod keys_management;
 pub mod rand_nonce;
 pub mod schnorr_musig;
 pub mod schnorr_single_signature;
+
+#[cfg(feature = "tracing")]
 pub mod telemetry;
 
 pub use crate::schnorr_musig::musig_protocol::aggregator;

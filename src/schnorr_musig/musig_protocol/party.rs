@@ -8,19 +8,19 @@ use crate::schnorr_musig::musig_math::*;
 use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::scalar::Scalar;
 use secrecy::Secret;
+use std::borrow::Cow;
 use std::marker::PhantomData;
 
 /// Party struct, which manages the role of a participant in the scheme.
-
 pub struct Party<'a, S: PartyState> {
-    pub(crate) keys: KeyPair,
-    pub message: &'a String,
-    pub general_public_key: Option<RistrettoPoint>,
-    pub cap_l: Option<Scalar>,
-    pub(crate) nonce: Option<RandomNonce>,
-    pub general_nonce: Option<RistrettoPoint>,
-    pub(crate) partial_signature: Option<Scalar>,
-    pub aggregated_signature: Option<Scalar>,
+    keys: KeyPair,
+    message: Cow<'a, str>,
+    general_public_key: Option<RistrettoPoint>,
+    cap_l: Option<Scalar>,
+    nonce: Option<RandomNonce>,
+    general_nonce: Option<RistrettoPoint>,
+    partial_signature: Option<Scalar>,
+    aggregated_signature: Option<Scalar>,
     state: PhantomData<S>,
 }
 
@@ -45,7 +45,7 @@ impl PartyState for PartyFinalized {}
 
 impl<S: PartyState> Party<'_, S> {}
 
-impl Party<'_, NewParty> {
+impl<'a> Party<'a, NewParty> {
     /// Create a new Party instance.
     ///
     /// # Arguments
@@ -55,13 +55,19 @@ impl Party<'_, NewParty> {
     /// Returns a tuple containing:
     /// 1. A Party in the "RandomNonceGeneration" state.
     /// 2. A PublicKey associated with the Party's public key.
-    pub fn new(message: &String) -> (Party<RandomNonceGeneration>, PublicKey) {
-        let keys = KeyPair::create();
+    pub fn new<R>(
+        message: impl Into<Cow<'a, str>>,
+        rng: R,
+    ) -> (Party<'a, RandomNonceGeneration>, PublicKey)
+    where
+        R: rand::CryptoRng + rand::RngCore,
+    {
+        let keys = KeyPair::create(rng);
         let public_key = keys.public_key;
         (
             Party {
                 keys,
-                message,
+                message: message.into(),
                 general_public_key: None,
                 cap_l: None,
                 nonce: None,
@@ -86,14 +92,14 @@ impl Party<'_, NewParty> {
     /// 2. A PublicKey associated with the Party's public key.
     pub fn new_from_private_key(
         private_key: Secret<Scalar>,
-        message: &String,
-    ) -> (Party<'_, RandomNonceGeneration>, PublicKey) {
+        message: impl Into<Cow<'a, str>>,
+    ) -> (Party<'a, RandomNonceGeneration>, PublicKey) {
         let keys = KeyPair::create_from_private_key(private_key);
         let public_key = keys.public_key;
         (
             Party {
                 keys,
-                message,
+                message: message.into(),
                 general_public_key: None,
                 cap_l: None,
                 nonce: None,
@@ -117,15 +123,19 @@ impl Party<'_, RandomNonceGeneration> {
     /// Returns a tuple containing:
     /// 1. A Party in the "PartialSignatureComputation" state.
     /// 2. A RandomNonceMessage containing the random nonce.
-    pub fn generate_nonce(
+    pub fn generate_nonce<R>(
         &self,
         agg_pubkey_and_hash_message: AggregatedPublicKeyAndHashMessage,
-    ) -> (Party<PartialSignatureComputation>, RandomNonceMessage) {
-        let nonce = RandomNonce::new_rand();
+        rng: R,
+    ) -> (Party<PartialSignatureComputation>, RandomNonceMessage)
+    where
+        R: rand::CryptoRng + rand::RngCore,
+    {
+        let nonce = RandomNonce::new_rand(rng);
         (
             Party {
                 keys: self.keys.clone(),
-                message: self.message,
+                message: self.message.clone(),
                 general_public_key: Some(agg_pubkey_and_hash_message.public_key),
                 cap_l: Some(agg_pubkey_and_hash_message.cap_l),
                 nonce: Some(nonce.clone()),
@@ -157,7 +167,7 @@ impl Party<'_, PartialSignatureComputation> {
     ) -> (Party<AwaitingAggregatedSignature>, PartialSignature) {
         let nonce = self.nonce.clone().unwrap();
         let partial_signature = partial_signature(
-            self.message,
+            self.message.clone(),
             &self.keys,
             &nonce.r_private,
             self.general_public_key.as_ref().unwrap(),
@@ -167,7 +177,7 @@ impl Party<'_, PartialSignatureComputation> {
         (
             Party {
                 keys: self.keys.clone(),
-                message: self.message,
+                message: self.message.clone(),
                 general_public_key: self.general_public_key,
                 cap_l: self.cap_l,
                 nonce: Some(nonce),
@@ -192,7 +202,7 @@ impl Party<'_, AwaitingAggregatedSignature> {
     pub fn set_aggregated_signature(&self, aggregated_signature: Scalar) -> Party<PartyFinalized> {
         Party {
             keys: self.keys.clone(),
-            message: self.message,
+            message: self.message.clone(),
             general_public_key: self.general_public_key,
             cap_l: self.cap_l,
             nonce: self.nonce.clone(),
@@ -224,7 +234,7 @@ impl Party<'_, PartyFinalized> {
         if verify_signature(
             &self.general_public_key.unwrap(),
             &self.general_nonce.unwrap(),
-            self.message,
+            self.message.clone(),
             self.aggregated_signature.unwrap(),
         ) {
             Ok(())
